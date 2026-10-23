@@ -1,37 +1,17 @@
-# 🔐 Password Entropy Auditor & Hash Cracker Simulator
+# Offline Password Policy Auditor
 
-[![Security Audit](https://img.shields.io/badge/Security-Educational%20Tool-emerald?style=for-the-badge)](https://github.com/sparkx313/cybersecurity-password-auditor)
-[![License: MIT](https://img.shields.io/badge/License-MIT-gold?style=for-the-badge)](LICENSE)
-[![Python 3.11](https://img.shields.io/badge/Python-3.11%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+A terminal utility that checks one password against a length policy and, optionally, a local exact-match blocklist. It reads the password through hidden terminal input. The password is not accepted as a command-line argument, printed, stored, or sent over a network. No third-party packages are required.
 
-## 📌 Description
-NIST-compliant password strength analyzer computing Shannon entropy bits, crack time estimations, and dictionary hash attack simulation.
+## Run
 
----
+~~~sh
+python password_auditor.py
+python password_auditor.py --mode mfa
+python password_auditor.py --blocklist ./local-blocklist.txt
+~~~
 
-## 🚀 Key Features
-- **Pure Python Implementation**: Lightweight, modular codebase with standard library efficiency.
-- **Security-First Architecture**: Built for educational ethical security assessments, red team exercises, and blue team defense auditing.
-- **Clear CLI Outputs**: Structured logging, status scores, and security alert formatting.
+The default single-factor mode checks a minimum of 15 Unicode code points. MFA mode uses a minimum of 8. These lengths follow the current NIST SP 800-63B guidance for centrally verified passwords; the program does not claim NIST compliance. It does not impose character-class rules.
 
----
+A supplied blocklist is read locally and compared as exact, case-sensitive lines. The tool has no built-in breached-password database, does not estimate entropy or crack time, and cannot prove that a password has never been exposed. A passing result means only that the configured checks passed. Prefer a password manager and unique passwords for each account.
 
-## 📦 Usage Instructions
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/sparkx313/cybersecurity-password-auditor.git
-   cd cybersecurity-password-auditor
-   ```
-
-2. **Run the security tool**:
-   ```bash
-   python password_auditor.py
-   ```
-
----
-
-## ⚠️ Educational Disclaimer
-This repository is created strictly for educational purposes, security auditing, and defensive research. Do not execute against target systems without explicit authorization.
-
-Developed with ❤️ by **sparkx313**.
+The program refuses redirected password input because it cannot guarantee that piped input is hidden. It needs a terminal that supports no-echo password entry.

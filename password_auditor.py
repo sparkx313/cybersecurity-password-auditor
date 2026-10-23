@@ -1,65 +1,94 @@
-import math
-import hashlib
+"""Offline password policy audit; never accepts a password as a command-line argument."""
+
+from __future__ import annotations
+
+import argparse
+import getpass
 import sys
+import warnings
+from pathlib import Path
 
-def calculate_entropy(password):
-    pool_size = 0
-    if any(c.islower() for c in password): pool_size += 26
-    if any(c.isupper() for c in password): pool_size += 26
-    if any(c.isdigit() for c in password): pool_size += 10
-    if any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password): pool_size += 32
 
-    if pool_size == 0 or len(password) == 0:
-        return 0, 0
+class AuditError(ValueError):
+    """Raised when hidden input or a local blocklist cannot be read."""
 
-    entropy = len(password) * math.log2(pool_size)
-    combinations = pool_size ** len(password)
-    return entropy, combinations
 
-def simulate_dictionary_attack(target_hash, wordlist):
-    print("\n--- ⚡ Simulating Hash Crack Attack ---")
-    for word in wordlist:
-        hashed = hashlib.sha256(word.encode('utf-8')).hexdigest()
-        if hashed == target_hash:
-            return True, word
-    return False, None
+def load_blocklist(path: Path | None) -> set[str]:
+    if path is None:
+        return set()
+    try:
+        entries = path.expanduser().read_text(encoding="utf-8-sig").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise AuditError(f"Could not read local blocklist: {exc}") from exc
+    return {entry for entry in entries if entry and not entry.lstrip().startswith("#")}
 
-def evaluate_password(password):
-    entropy, combinations = calculate_entropy(password)
-    print("=" * 60)
-    print(f"🔐 Password Security Audit")
-    print("=" * 60)
-    print(f"Password Length: {len(password)} characters")
-    print(f"Entropy Score : {entropy:.2f} bits")
-    print(f"Search Space  : {combinations:.2e} total combinations")
-    
-    if entropy < 28:
-        strength = "VERY WEAK 🔴 (Instant Crack)"
-    elif entropy < 36:
-        strength = "WEAK 🟠 (Cracked in minutes)"
-    elif entropy < 60:
-        strength = "MODERATE 🟡 (Cracked in days/weeks)"
-    elif entropy < 80:
-        strength = "STRONG 🟢 (Resistant to brute-force)"
-    else:
-        strength = "VERY STRONG 🟢 (Cryptographically Secure)"
-        
-    print(f"Rating        : {strength}")
-    print("=" * 60)
 
-    # Demo hash attack
-    demo_secret = "admin123"
-    target_hash = hashlib.sha256(demo_secret.encode()).hexdigest()
-    common_passwords = ["123456", "password", "admin", "welcome", "admin123", "letmein"]
-    
-    print(f"Target SHA-256 Hash: {target_hash}")
-    found, word = simulate_dictionary_attack(target_hash, common_passwords)
-    if found:
-        print(f"🎯 Hash Match Found! Plaintext: '{word}'")
+def audit_password(password: str, minimum_length: int, blocklist: set[str]) -> list[str]:
+    issues = []
+    length = len(password)
+    if length < minimum_length:
+        issues.append(f"Password is {length} Unicode code points; minimum is {minimum_length}.")
+    if password in blocklist:
+        issues.append("Password exactly matches an entry in the supplied local blocklist.")
+    return issues
 
-def main():
-    sample_pass = sys.argv[1] if len(sys.argv) > 1 else "P@ssw0rd2026!Secure"
-    evaluate_password(sample_pass)
+
+def read_hidden_password() -> str:
+    if not sys.stdin.isatty():
+        raise AuditError("Password audit requires an interactive terminal; password input is never read from a pipe.")
+    with warnings.catch_warnings(record=True) as observed:
+        warnings.simplefilter("always", getpass.GetPassWarning)
+        try:
+            password = getpass.getpass("Password to audit (input hidden): ")
+        except (EOFError, KeyboardInterrupt) as exc:
+            raise AuditError("Password input was cancelled.") from exc
+    if any(issubclass(item.category, getpass.GetPassWarning) for item in observed):
+        raise AuditError("Could not disable terminal echo; refusing to audit this input.")
+    return password
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Check a password against a length policy and an optional local blocklist."
+    )
+    parser.add_argument(
+        "--mode",
+        choices=("single-factor", "mfa"),
+        default="single-factor",
+        help="single-factor uses a 15-code-point minimum; mfa uses 8",
+    )
+    parser.add_argument(
+        "--blocklist",
+        type=Path,
+        help="optional local file with one exact password per line",
+    )
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    minimum_length = 15 if args.mode == "single-factor" else 8
+    try:
+        blocklist = load_blocklist(args.blocklist)
+        password = read_hidden_password()
+        issues = audit_password(password, minimum_length, blocklist)
+    except AuditError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    # Do not print, hash, persist, or transmit the password.
+    print(f"Mode: {args.mode}")
+    print(f"Length: {len(password)} Unicode code points (minimum {minimum_length})")
+    if args.blocklist:
+        print(f"Local blocklist entries checked: {len(blocklist)}")
+    if issues:
+        print("Policy check failed:")
+        for issue in issues:
+            print(f"- {issue}")
+        return 1
+    print("Policy check passed. This does not establish that the password is secret or uncompromised.")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
