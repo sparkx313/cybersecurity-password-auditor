@@ -10,7 +10,7 @@ python password_auditor.py --mode mfa
 python password_auditor.py --blocklist ./local-blocklist.txt
 ~~~
 
-The default single-factor mode checks a minimum of 15 Unicode code points. MFA mode uses a minimum of 8. These lengths follow the current NIST SP 800-63B guidance for centrally verified passwords; the program does not claim NIST compliance. It does not impose character-class rules.
+The default single-factor mode checks a minimum of 15 Unicode code points. MFA mode uses a minimum of 8. These lengths follow the current [NIST SP 800-63B guidance](https://pages.nist.gov/800-63-4/sp800-63b.html) for centrally verified passwords; the program does not claim NIST compliance. It does not impose character-class rules.
 
 A supplied blocklist is read locally and compared as exact, case-sensitive lines. The tool has no built-in breached-password database, does not estimate entropy or crack time, and cannot prove that a password has never been exposed. A passing result means only that the configured checks passed. Prefer a password manager and unique passwords for each account.
 
